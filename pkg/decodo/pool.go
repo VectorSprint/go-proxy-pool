@@ -17,6 +17,7 @@ type FailureCause struct {
 type Lease struct {
 	Key       string
 	SessionID string
+	Port      int
 	ProxyURL  string
 	ExpiresAt time.Time
 }
@@ -36,6 +37,8 @@ type Pool struct {
 	failureThreshold int
 	now              func() time.Time
 	newSessionID     func(key string) string
+	portExplicit     bool
+	nextStickyPort   int
 	entries          map[string]poolEntry
 }
 
@@ -85,6 +88,8 @@ func NewPool(options PoolOptions) (*Pool, error) {
 		failureThreshold: options.FailureThreshold,
 		now:              options.Now,
 		newSessionID:     options.NewSessionID,
+		portExplicit:     options.Config.Port != 0,
+		nextStickyPort:   normalized.EndpointSpec.StickyPortRange.Start,
 		entries:          make(map[string]poolEntry),
 	}, nil
 }
@@ -171,9 +176,14 @@ func (p *Pool) isExpired(lease Lease) bool {
 func (p *Pool) newLease(key string) (Lease, error) {
 	sessionID := p.newSessionID(key)
 	expiresAt := p.now().Add(p.config.Session.TTL())
+	port, err := p.selectPort()
+	if err != nil {
+		return Lease{}, err
+	}
 
 	config := p.config
 	config.Session.ID = sessionID
+	config.Port = port
 
 	proxyURL, err := config.ProxyURL()
 	if err != nil {
@@ -183,7 +193,55 @@ func (p *Pool) newLease(key string) (Lease, error) {
 	return Lease{
 		Key:       key,
 		SessionID: sessionID,
+		Port:      port,
 		ProxyURL:  proxyURL.String(),
 		ExpiresAt: expiresAt,
 	}, nil
+}
+
+func (p *Pool) selectPort() (int, error) {
+	if p.portExplicit || p.config.Session.Type != SessionTypeSticky || p.config.EndpointSpec.IsZero() || p.config.EndpointSpec.StickyPortRange.IsZero() {
+		return p.config.Port, nil
+	}
+
+	return p.allocateStickyPort()
+}
+
+func (p *Pool) allocateStickyPort() (int, error) {
+	portRange := p.config.EndpointSpec.StickyPortRange
+	if portRange.IsZero() {
+		return p.config.Port, nil
+	}
+
+	if p.nextStickyPort < portRange.Start || p.nextStickyPort > portRange.End {
+		p.nextStickyPort = portRange.Start
+	}
+
+	candidate := p.nextStickyPort
+	for attempts := 0; attempts < portRange.size(); attempts++ {
+		if !p.portInUse(candidate) {
+			p.nextStickyPort = candidate + 1
+			if p.nextStickyPort > portRange.End {
+				p.nextStickyPort = portRange.Start
+			}
+			return candidate, nil
+		}
+
+		candidate++
+		if candidate > portRange.End {
+			candidate = portRange.Start
+		}
+	}
+
+	return 0, errors.New("no sticky ports available in the configured range")
+}
+
+func (p *Pool) portInUse(port int) bool {
+	for _, entry := range p.entries {
+		if entry.lease.Port == port && !p.isExpired(entry.lease) {
+			return true
+		}
+	}
+
+	return false
 }

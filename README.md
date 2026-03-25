@@ -196,6 +196,43 @@ if err := pool.ReportFailure("account-1", decodo.FailureCause{
 - `examples/nethttp-basic`：标准库 `net/http` 接入
 - `examples/pool-basic`：sticky session pool 的获取与失败轮换
 - `examples/httpcloak-proxy-string`：为 `httpcloak` 生成可直接 `SetProxy(...)` 的字符串
+- `examples/dedicated-endpoint`：使用 Decodo dedicated endpoint、rotating port 和 sticky port range
+
+## endpoint 和 port 选择
+
+当前项目除了默认的 `gate.decodo.com:7000` backconnect 方案外，也支持显式建模 Decodo 文档里的 dedicated endpoint：
+
+```go
+caEndpoint, err := decodo.NewEndpointSpec("ca.decodo.com", 20000, decodo.PortRange{
+  Start: 20001,
+  End:   29999,
+})
+if err != nil {
+  return err
+}
+```
+
+然后接入到配置里：
+
+```go
+cfg := decodo.Config{
+  Auth:         auth,
+  EndpointSpec: caEndpoint,
+}
+```
+
+选择规则如下：
+
+- rotating session：如果没显式指定 `Port`，自动使用 `RotatingPort`
+- sticky session：如果没显式指定 `Port`，自动使用 `StickyPortRange.Start`
+- sticky pool：如果配置了 `StickyPortRange`，pool 会在范围内为不同 key 分配可用 sticky port
+- 如果你显式设置了 `Config.Port`，则优先使用该端口
+
+这意味着你现在可以表达：
+
+- 默认 backconnect：`gate.decodo.com:7000`
+- dedicated rotating endpoint：例如 `ca.decodo.com:20000`
+- dedicated sticky endpoint：例如 `ca.decodo.com:20001-29999` 范围中的 sticky 端口
 
 ## Go docs
 

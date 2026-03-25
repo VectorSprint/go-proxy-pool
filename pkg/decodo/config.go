@@ -27,11 +27,12 @@ const (
 
 // Config describes a Decodo user:pass backconnect proxy configuration.
 type Config struct {
-	Auth      Auth
-	Endpoint  string
-	Port      int
-	Targeting Targeting
-	Session   Session
+	Auth         Auth
+	EndpointSpec EndpointSpec
+	Endpoint     string
+	Port         int
+	Targeting    Targeting
+	Session      Session
 }
 
 // Auth stores the raw Decodo proxy username and password from the dashboard.
@@ -57,6 +58,19 @@ type Session struct {
 	DurationMinutes int
 }
 
+// EndpointSpec describes a Decodo endpoint together with its rotating port and sticky port range.
+type EndpointSpec struct {
+	Host            string
+	RotatingPort    int
+	StickyPortRange PortRange
+}
+
+// PortRange describes an inclusive port range.
+type PortRange struct {
+	Start int
+	End   int
+}
+
 // TTL returns the sticky-session lifetime as a time.Duration.
 func (s Session) TTL() time.Duration {
 	if s.Type != SessionTypeSticky || s.DurationMinutes <= 0 {
@@ -64,6 +78,82 @@ func (s Session) TTL() time.Duration {
 	}
 
 	return time.Duration(s.DurationMinutes) * time.Minute
+}
+
+// NewEndpointSpec validates and returns a Decodo endpoint specification.
+func NewEndpointSpec(host string, rotatingPort int, stickyPortRange PortRange) (EndpointSpec, error) {
+	spec := EndpointSpec{
+		Host:            strings.TrimSpace(strings.ToLower(host)),
+		RotatingPort:    rotatingPort,
+		StickyPortRange: stickyPortRange,
+	}
+
+	if err := spec.Validate(); err != nil {
+		return EndpointSpec{}, err
+	}
+
+	return spec, nil
+}
+
+// Validate checks whether the endpoint specification is structurally valid.
+func (e EndpointSpec) Validate() error {
+	if e.IsZero() {
+		return nil
+	}
+
+	if strings.TrimSpace(e.Host) == "" {
+		return errors.New("endpoint spec host is required")
+	}
+
+	if e.RotatingPort <= 0 {
+		return errors.New("endpoint spec rotating port must be positive")
+	}
+
+	return e.StickyPortRange.Validate()
+}
+
+// IsZero reports whether the endpoint specification is unset.
+func (e EndpointSpec) IsZero() bool {
+	return strings.TrimSpace(e.Host) == "" && e.RotatingPort == 0 && e.StickyPortRange.IsZero()
+}
+
+// Validate checks whether the port range is structurally valid.
+func (r PortRange) Validate() error {
+	if r.IsZero() {
+		return nil
+	}
+
+	if r.Start <= 0 || r.End <= 0 {
+		return errors.New("port range values must be positive")
+	}
+
+	if r.End < r.Start {
+		return errors.New("port range end must be greater than or equal to start")
+	}
+
+	return nil
+}
+
+// IsZero reports whether the port range is unset.
+func (r PortRange) IsZero() bool {
+	return r.Start == 0 && r.End == 0
+}
+
+// Contains reports whether the range includes the provided port.
+func (r PortRange) Contains(port int) bool {
+	if r.IsZero() {
+		return false
+	}
+
+	return port >= r.Start && port <= r.End
+}
+
+func (r PortRange) size() int {
+	if r.IsZero() {
+		return 0
+	}
+
+	return r.End - r.Start + 1
 }
 
 // NewAuth validates and normalizes raw Decodo dashboard credentials.
@@ -105,6 +195,10 @@ func (c Config) Validate() error {
 	}
 
 	if err := normalized.Auth.Validate(); err != nil {
+		return err
+	}
+
+	if err := normalized.EndpointSpec.Validate(); err != nil {
 		return err
 	}
 
@@ -162,6 +256,10 @@ func (c Config) Validate() error {
 		return fmt.Errorf("unsupported session type %q", normalized.Session.Type)
 	}
 
+	if normalized.Session.Type == SessionTypeSticky && !normalized.EndpointSpec.IsZero() && !normalized.EndpointSpec.StickyPortRange.IsZero() && !normalized.EndpointSpec.StickyPortRange.Contains(normalized.Port) {
+		return errors.New("sticky session port must be inside the endpoint sticky port range")
+	}
+
 	return nil
 }
 
@@ -169,17 +267,10 @@ func (c Config) Validate() error {
 func (c Config) Normalized() (Config, error) {
 	normalized := c
 
-	normalized.Endpoint = strings.TrimSpace(normalized.Endpoint)
-	if normalized.Endpoint == "" {
-		normalized.Endpoint = defaultEndpoint
-	}
-
-	if normalized.Port == 0 {
-		normalized.Port = defaultPort
-	}
-
 	normalized.Auth.Username = strings.TrimSpace(normalized.Auth.Username)
 	normalized.Auth.Password = strings.TrimSpace(normalized.Auth.Password)
+	normalized.Endpoint = strings.TrimSpace(strings.ToLower(normalized.Endpoint))
+	normalized.EndpointSpec.Host = strings.TrimSpace(strings.ToLower(normalized.EndpointSpec.Host))
 
 	normalized.Targeting.Country = normalizeToken(normalized.Targeting.Country)
 	normalized.Targeting.City = normalizeToken(normalized.Targeting.City)
@@ -198,6 +289,26 @@ func (c Config) Normalized() (Config, error) {
 
 	if normalized.Session.Type == SessionTypeSticky && normalized.Session.DurationMinutes == 0 {
 		normalized.Session.DurationMinutes = defaultStickyDurationMinutes
+	}
+
+	if normalized.EndpointSpec.IsZero() {
+		if normalized.Endpoint == "" {
+			normalized.Endpoint = defaultEndpoint
+		}
+		if normalized.Port == 0 {
+			normalized.Port = defaultPort
+		}
+	} else {
+		if normalized.Endpoint == "" {
+			normalized.Endpoint = normalized.EndpointSpec.Host
+		}
+		if normalized.Port == 0 {
+			if normalized.Session.Type == SessionTypeSticky && !normalized.EndpointSpec.StickyPortRange.IsZero() {
+				normalized.Port = normalized.EndpointSpec.StickyPortRange.Start
+			} else {
+				normalized.Port = normalized.EndpointSpec.RotatingPort
+			}
+		}
 	}
 
 	if err := normalized.ValidateShallow(); err != nil {

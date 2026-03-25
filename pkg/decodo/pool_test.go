@@ -244,6 +244,56 @@ func TestPoolCleanupExpiredRemovesExpiredEntries(t *testing.T) {
 	}
 }
 
+func TestPoolAssignsStickyPortsFromRange(t *testing.T) {
+	spec, err := decodo.NewEndpointSpec("ca.decodo.com", 20000, decodo.PortRange{
+		Start: 20001,
+		End:   20003,
+	})
+	if err != nil {
+		t.Fatalf("NewEndpointSpec() error = %v", err)
+	}
+
+	now := time.Date(2026, 3, 25, 13, 0, 0, 0, time.UTC)
+	pool, err := decodo.NewPool(decodo.PoolOptions{
+		Config: decodo.Config{
+			Auth: decodo.Auth{
+				Username: "username",
+				Password: "password",
+			},
+			EndpointSpec: spec,
+			Session: decodo.Session{
+				Type:            decodo.SessionTypeSticky,
+				DurationMinutes: 30,
+			},
+		},
+		Now: func() time.Time {
+			return now
+		},
+		NewSessionID: sequenceSessionIDs("session-1", "session-2"),
+	})
+	if err != nil {
+		t.Fatalf("NewPool() error = %v", err)
+	}
+
+	first, err := pool.Get("account-1")
+	if err != nil {
+		t.Fatalf("Get() error = %v", err)
+	}
+
+	second, err := pool.Get("account-2")
+	if err != nil {
+		t.Fatalf("Get() error = %v", err)
+	}
+
+	if first.Port != 20001 {
+		t.Fatalf("first port = %d, want %d", first.Port, 20001)
+	}
+
+	if second.Port != 20002 {
+		t.Fatalf("second port = %d, want %d", second.Port, 20002)
+	}
+}
+
 func sequenceSessionIDs(ids ...string) func(string) string {
 	index := 0
 	return func(string) string {

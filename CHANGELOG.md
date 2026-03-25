@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project follows Semantic Versioning.
 
+## [Unreleased]
+
+### Added
+
+- Explicit `EndpointSpec` and `PortRange` support for Decodo dedicated endpoints
+- Automatic rotating-port and sticky-port selection from dedicated endpoint metadata
+- Sticky pool port allocation within configured sticky port ranges
+
 ## [0.1.0] - 2026-03-25
 
 ### Added
