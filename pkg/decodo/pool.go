@@ -7,11 +7,13 @@ import (
 	"time"
 )
 
+// FailureCause carries failure information reported by the caller.
 type FailureCause struct {
 	Err        error
 	StatusCode int
 }
 
+// Lease represents one resolved sticky-session proxy assignment for a business key.
 type Lease struct {
 	Key       string
 	SessionID string
@@ -19,6 +21,7 @@ type Lease struct {
 	ExpiresAt time.Time
 }
 
+// PoolOptions configures how a keyed sticky-session pool behaves.
 type PoolOptions struct {
 	Config           Config
 	FailureThreshold int
@@ -26,6 +29,7 @@ type PoolOptions struct {
 	NewSessionID     func(key string) string
 }
 
+// Pool stores sticky-session leases keyed by caller-defined business identifiers.
 type Pool struct {
 	mu               sync.Mutex
 	config           Config
@@ -40,6 +44,7 @@ type poolEntry struct {
 	failureCount int
 }
 
+// NewPool creates a keyed sticky-session pool from a Decodo configuration.
 func NewPool(options PoolOptions) (*Pool, error) {
 	config := options.Config
 	if config.Session.Type == "" {
@@ -84,6 +89,7 @@ func NewPool(options PoolOptions) (*Pool, error) {
 	}, nil
 }
 
+// Get returns the active lease for the key or creates a new one when none exists or it expired.
 func (p *Pool) Get(key string) (Lease, error) {
 	if key == "" {
 		return Lease{}, errors.New("key is required")
@@ -106,6 +112,7 @@ func (p *Pool) Get(key string) (Lease, error) {
 	return lease, nil
 }
 
+// Rotate invalidates the current lease for the key so that the next Get allocates a new session.
 func (p *Pool) Rotate(key string) error {
 	if key == "" {
 		return errors.New("key is required")
@@ -117,6 +124,7 @@ func (p *Pool) Rotate(key string) error {
 	return nil
 }
 
+// ReportFailure increments failure state for the key and rotates once the threshold is reached.
 func (p *Pool) ReportFailure(key string, _ FailureCause) error {
 	if key == "" {
 		return errors.New("key is required")
@@ -140,6 +148,7 @@ func (p *Pool) ReportFailure(key string, _ FailureCause) error {
 	return nil
 }
 
+// CleanupExpired removes expired leases and returns how many entries were deleted.
 func (p *Pool) CleanupExpired() int {
 	p.mu.Lock()
 	defer p.mu.Unlock()

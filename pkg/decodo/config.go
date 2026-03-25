@@ -19,10 +19,13 @@ const (
 type SessionType string
 
 const (
+	// SessionTypeRotating requests a new residential IP on each proxy request.
 	SessionTypeRotating SessionType = "rotating"
-	SessionTypeSticky   SessionType = "sticky"
+	// SessionTypeSticky keeps the same residential IP for the configured session duration.
+	SessionTypeSticky SessionType = "sticky"
 )
 
+// Config describes a Decodo user:pass backconnect proxy configuration.
 type Config struct {
 	Auth      Auth
 	Endpoint  string
@@ -31,11 +34,13 @@ type Config struct {
 	Session   Session
 }
 
+// Auth stores the raw Decodo proxy username and password from the dashboard.
 type Auth struct {
 	Username string
 	Password string
 }
 
+// Targeting describes optional Decodo location and carrier targeting parameters.
 type Targeting struct {
 	Country   string
 	City      string
@@ -45,12 +50,14 @@ type Targeting struct {
 	ASN       int
 }
 
+// Session describes whether requests should rotate IPs or reuse a sticky session.
 type Session struct {
 	Type            SessionType
 	ID              string
 	DurationMinutes int
 }
 
+// TTL returns the sticky-session lifetime as a time.Duration.
 func (s Session) TTL() time.Duration {
 	if s.Type != SessionTypeSticky || s.DurationMinutes <= 0 {
 		return 0
@@ -59,6 +66,7 @@ func (s Session) TTL() time.Duration {
 	return time.Duration(s.DurationMinutes) * time.Minute
 }
 
+// NewAuth validates and normalizes raw Decodo dashboard credentials.
 func NewAuth(username, password string) (Auth, error) {
 	auth := Auth{
 		Username: strings.TrimSpace(username),
@@ -72,6 +80,7 @@ func NewAuth(username, password string) (Auth, error) {
 	return auth, nil
 }
 
+// Validate checks whether the credentials can be used to build a Decodo proxy username.
 func (a Auth) Validate() error {
 	if strings.TrimSpace(a.Username) == "" {
 		return errors.New("username is required")
@@ -88,6 +97,7 @@ func (a Auth) Validate() error {
 	return nil
 }
 
+// Validate checks whether the configuration satisfies Decodo parameter constraints.
 func (c Config) Validate() error {
 	normalized, err := c.Normalized()
 	if err != nil {
@@ -155,6 +165,7 @@ func (c Config) Validate() error {
 	return nil
 }
 
+// Normalized returns a copy of the configuration with defaults and normalized tokens applied.
 func (c Config) Normalized() (Config, error) {
 	normalized := c
 
@@ -196,6 +207,7 @@ func (c Config) Normalized() (Config, error) {
 	return normalized, nil
 }
 
+// ProxyUsername builds the Decodo proxy username, including targeting and session parameters.
 func (c Config) ProxyUsername() (string, error) {
 	normalized, err := c.Normalized()
 	if err != nil {
@@ -233,6 +245,7 @@ func (c Config) ProxyUsername() (string, error) {
 	return strings.Join(parts, "-"), nil
 }
 
+// ProxyURL builds an authenticated Decodo proxy URL suitable for HTTP proxy clients.
 func (c Config) ProxyURL() (*url.URL, error) {
 	normalized, err := c.Normalized()
 	if err != nil {
@@ -251,6 +264,7 @@ func (c Config) ProxyURL() (*url.URL, error) {
 	}, nil
 }
 
+// ValidateShallow checks lightweight structural constraints before full validation.
 func (c Config) ValidateShallow() error {
 	if c.Port < 0 {
 		return errors.New("port must be positive")

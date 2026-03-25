@@ -6,6 +6,49 @@
 - 生成可直接用于 `httpcloak` 和 `net/http` 的代理 URL
 - 管理按业务 key 复用的 sticky session
 
+## 当前标准化状态
+
+当前项目已经具备这些常见 Go 项目要素：
+
+- 正式 module path：`github.com/VectorSprint/go-proxy-pool`
+- `CHANGELOG.md`
+- `README.md`
+- MIT `LICENSE`
+- `.gitignore`
+- 基础 GitHub Actions 测试 workflow
+- 基础 GitHub Actions lint workflow
+- 导出 API 的 Go doc 注释
+- 可运行示例与单元测试
+
+## 安装
+
+私有仓库场景下，建议先配置：
+
+```bash
+go env -w GOPRIVATE=github.com/VectorSprint/*
+```
+
+然后在其他项目中拉取：
+
+```bash
+go get github.com/VectorSprint/go-proxy-pool@latest
+```
+
+## 导入路径
+
+主入口：
+
+```go
+import "github.com/VectorSprint/go-proxy-pool/pkg/decodo"
+```
+
+适配器：
+
+```go
+import httpcloakadapter "github.com/VectorSprint/go-proxy-pool/pkg/decodo/adapter/httpcloak"
+import nethttpadapter "github.com/VectorSprint/go-proxy-pool/pkg/decodo/adapter/nethttp"
+```
+
 ## username 和 password 应该怎么填
 
 ### username
@@ -154,6 +197,20 @@ if err := pool.ReportFailure("account-1", decodo.FailureCause{
 - `examples/pool-basic`：sticky session pool 的获取与失败轮换
 - `examples/httpcloak-proxy-string`：为 `httpcloak` 生成可直接 `SetProxy(...)` 的字符串
 
+## Go docs
+
+当前已经补齐导出 API 的 Go doc 注释。
+
+本地可以这样看：
+
+```bash
+go doc github.com/VectorSprint/go-proxy-pool/pkg/decodo
+go doc github.com/VectorSprint/go-proxy-pool/pkg/decodo/adapter/httpcloak
+go doc github.com/VectorSprint/go-proxy-pool/pkg/decodo/adapter/nethttp
+```
+
+如果未来仓库改为公开仓库，也可以直接使用 `pkg.go.dev` 查看文档。
+
 ## 发布前建议
 
 当前正式 module path 为：
@@ -161,3 +218,17 @@ if err := pool.ReportFailure("account-1", decodo.FailureCause{
 ```text
 github.com/VectorSprint/go-proxy-pool
 ```
+
+建议用语义化版本发布，例如：
+
+```bash
+git tag -a v0.1.0 -m "v0.1.0"
+git push origin main --tags
+```
+
+首个版本建议包含：
+
+- 当前 `decodo` 主包
+- `httpcloak` / `net/http` adapter
+- examples
+- `CHANGELOG.md`

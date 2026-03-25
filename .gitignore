@@ -1,0 +1,16 @@
+# Binaries and build outputs
+/bin/
+/dist/
+*.exe
+*.out
+*.test
+
+# Coverage and profiling
+coverage.out
+*.coverprofile
+*.pprof
+
+# IDE and OS files
+.DS_Store
+.idea/
+.vscode/
