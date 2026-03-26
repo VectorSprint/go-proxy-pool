@@ -15,8 +15,10 @@
 - `README.md`
 - MIT `LICENSE`
 - `.gitignore`
+- `Taskfile.yml`
 - 基础 GitHub Actions 测试 workflow
 - 基础 GitHub Actions lint workflow
+- 仓库级 `.golangci.yml` lint 配置
 - 导出 API 的 Go doc 注释
 - 可运行示例与单元测试
 
@@ -33,6 +35,22 @@ go env -w GOPRIVATE=github.com/VectorSprint/*
 ```bash
 go get github.com/VectorSprint/go-proxy-pool@latest
 ```
+
+## 开发检查
+
+本仓库使用仓库根目录下的 `.golangci.yml` 作为统一 lint 配置，并通过 `Taskfile.yml` 暴露本地开发命令。
+
+先按 <https://taskfile.dev/> 安装 `task`，然后在仓库根目录执行：
+
+```bash
+task test
+task lint
+task check
+```
+
+其中 `task check` 会串行执行测试和 lint。
+
+GitHub Actions 的 `lint` workflow 仍然使用同一套仓库配置。
 
 ## 导入路径
 
