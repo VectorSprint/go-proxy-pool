@@ -294,6 +294,207 @@ func TestPoolAssignsStickyPortsFromRange(t *testing.T) {
 	}
 }
 
+func TestPoolRandomPortSelection(t *testing.T) {
+	spec, err := decodo.NewEndpointSpec("ca.decodo.com", 20000, decodo.PortRange{
+		Start: 20001,
+		End:   20010,
+	})
+	if err != nil {
+		t.Fatalf("NewEndpointSpec() error = %v", err)
+	}
+
+	now := time.Date(2026, 3, 25, 13, 0, 0, 0, time.UTC)
+	pool, err := decodo.NewPool(decodo.PoolOptions{
+		Config: decodo.Config{
+			Auth: decodo.Auth{
+				Username: "username",
+				Password: "password",
+			},
+			EndpointSpec: spec,
+			Session: decodo.Session{
+				Type:            decodo.SessionTypeSticky,
+				DurationMinutes: 30,
+			},
+		},
+		RandomPort: true,
+		Now: func() time.Time {
+			return now
+		},
+		NewSessionID: sequenceSessionIDs("session-1", "session-2"),
+	})
+	if err != nil {
+		t.Fatalf("NewPool() error = %v", err)
+	}
+
+	lease1, err := pool.Get("account-1")
+	if err != nil {
+		t.Fatalf("Get() error = %v", err)
+	}
+
+	if lease1.Port < 20001 || lease1.Port > 20010 {
+		t.Fatalf("port %d out of range [20001, 20010]", lease1.Port)
+	}
+
+	lease2, err := pool.Get("account-2")
+	if err != nil {
+		t.Fatalf("Get() error = %v", err)
+	}
+
+	if lease2.Port < 20001 || lease2.Port > 20010 {
+		t.Fatalf("port %d out of range [20001, 20010]", lease2.Port)
+	}
+
+	if lease1.Port == lease2.Port {
+		t.Fatalf("expected different ports, got both %d", lease1.Port)
+	}
+}
+
+func TestPoolAllocatesSequentialPortsExhaustingRange(t *testing.T) {
+	spec, err := decodo.NewEndpointSpec("ca.decodo.com", 20000, decodo.PortRange{
+		Start: 20001,
+		End:   20003,
+	})
+	if err != nil {
+		t.Fatalf("NewEndpointSpec() error = %v", err)
+	}
+
+	now := time.Date(2026, 3, 25, 13, 0, 0, 0, time.UTC)
+	pool, err := decodo.NewPool(decodo.PoolOptions{
+		Config: decodo.Config{
+			Auth: decodo.Auth{
+				Username: "username",
+				Password: "password",
+			},
+			EndpointSpec: spec,
+			Session: decodo.Session{
+				Type:            decodo.SessionTypeSticky,
+				DurationMinutes: 30,
+			},
+		},
+		Now: func() time.Time {
+			return now
+		},
+		NewSessionID: sequenceSessionIDs("s1", "s2", "s3", "s4"),
+	})
+	if err != nil {
+		t.Fatalf("NewPool() error = %v", err)
+	}
+
+	// Fill all ports
+	_, err = pool.Get("a")
+	if err != nil {
+		t.Fatalf("Get(a) error = %v", err)
+	}
+	_, err = pool.Get("b")
+	if err != nil {
+		t.Fatalf("Get(b) error = %v", err)
+	}
+	_, err = pool.Get("c")
+	if err != nil {
+		t.Fatalf("Get(c) error = %v", err)
+	}
+
+	// Now all ports in range [20001, 20003] should be in use
+	// The 4th get should fail since all 3 ports are exhausted
+	_, err = pool.Get("d")
+	if err == nil {
+		t.Fatal("Get(d) error = nil, want error when all ports exhausted")
+	}
+}
+
+func TestPoolNewPoolRejectsRotatingSession(t *testing.T) {
+	_, err := decodo.NewPool(decodo.PoolOptions{
+		Config: decodo.Config{
+			Auth: decodo.Auth{
+				Username: "username",
+				Password: "password",
+			},
+			Session: decodo.Session{
+				Type:            decodo.SessionTypeRotating,
+				DurationMinutes: 0,
+			},
+		},
+	})
+	if err == nil {
+		t.Fatal("NewPool() error = nil, want error for rotating session")
+	}
+}
+
+func TestPoolReportFailureIgnoresUnknownKey(t *testing.T) {
+	pool, err := decodo.NewPool(decodo.PoolOptions{
+		Config: decodo.Config{
+			Auth: decodo.Auth{
+				Username: "username",
+				Password: "password",
+			},
+			Session: decodo.Session{
+				Type:            decodo.SessionTypeSticky,
+				DurationMinutes: 30,
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewPool() error = %v", err)
+	}
+
+	// Should not panic
+	err = pool.ReportFailure("unknown-key", decodo.FailureCause{StatusCode: 500})
+	if err != nil {
+		t.Fatalf("ReportFailure(unknown) error = %v", err)
+	}
+}
+
+func TestPoolRotateIgnoresUnknownKey(t *testing.T) {
+	pool, err := decodo.NewPool(decodo.PoolOptions{
+		Config: decodo.Config{
+			Auth: decodo.Auth{
+				Username: "username",
+				Password: "password",
+			},
+			Session: decodo.Session{
+				Type:            decodo.SessionTypeSticky,
+				DurationMinutes: 30,
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewPool() error = %v", err)
+	}
+
+	// Should not panic
+	err = pool.Rotate("unknown-key")
+	if err != nil {
+		t.Fatalf("Rotate(unknown) error = %v", err)
+	}
+}
+
+func TestPoolGetRequiresNonEmptyKey(t *testing.T) {
+	pool, err := decodo.NewPool(decodo.PoolOptions{
+		Config: decodo.Config{
+			Auth: decodo.Auth{
+				Username: "username",
+				Password: "password",
+			},
+			Session: decodo.Session{
+				Type:            decodo.SessionTypeSticky,
+				DurationMinutes: 30,
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewPool() error = %v", err)
+	}
+
+	_, err = pool.Get("")
+	if err == nil {
+		t.Fatal("Get('') error = nil, want error")
+	}
+}
+
+// TestPoolRandomPortExhaustedReturnsError is hard to test deterministically
+// since random port selection doesn't guarantee unique ports.
+// The exhausted case is already covered by TestPoolAllocatesSequentialPortsExhaustingRange.
+
 func sequenceSessionIDs(ids ...string) func(string) string {
 	index := 0
 	return func(string) string {

@@ -3,6 +3,7 @@ package decodo
 import (
 	"errors"
 	"fmt"
+	"math/rand"
 	"sync"
 	"time"
 )
@@ -28,6 +29,12 @@ type PoolOptions struct {
 	FailureThreshold int
 	Now              func() time.Time
 	NewSessionID     func(key string) string
+	// RandomPort selects a random sticky port from the available range instead of
+	// sequentially allocating ports. This reduces detection risk when using a single
+	// endpoint with many sessions.
+	RandomPort bool
+	// Rand is the random source for port selection. If nil, math/rand is used.
+	Rand *rand.Rand
 }
 
 // Pool stores sticky-session leases keyed by caller-defined business identifiers.
@@ -37,6 +44,8 @@ type Pool struct {
 	failureThreshold int
 	now              func() time.Time
 	newSessionID     func(key string) string
+	randomPort       bool
+	rand             *rand.Rand
 	portExplicit     bool
 	nextStickyPort   int
 	entries          map[string]poolEntry
@@ -88,6 +97,8 @@ func NewPool(options PoolOptions) (*Pool, error) {
 		failureThreshold: options.FailureThreshold,
 		now:              options.Now,
 		newSessionID:     options.NewSessionID,
+		randomPort:       options.RandomPort,
+		rand:             options.Rand,
 		portExplicit:     options.Config.Port != 0,
 		nextStickyPort:   normalized.EndpointSpec.StickyPortRange.Start,
 		entries:          make(map[string]poolEntry),
@@ -213,6 +224,10 @@ func (p *Pool) allocateStickyPort() (int, error) {
 		return p.config.Port, nil
 	}
 
+	if p.randomPort {
+		return p.allocateRandomPort(portRange)
+	}
+
 	if p.nextStickyPort < portRange.Start || p.nextStickyPort > portRange.End {
 		p.nextStickyPort = portRange.Start
 	}
@@ -230,6 +245,38 @@ func (p *Pool) allocateStickyPort() (int, error) {
 		candidate++
 		if candidate > portRange.End {
 			candidate = portRange.Start
+		}
+	}
+
+	return 0, errors.New("no sticky ports available in the configured range")
+}
+
+func (p *Pool) allocateRandomPort(portRange PortRange) (int, error) {
+	size := portRange.size()
+	if size == 0 {
+		return p.config.Port, nil
+	}
+
+	r := p.rand
+	if r == nil {
+		r = rand.New(rand.NewSource(time.Now().UnixNano()))
+	}
+
+	usedPorts := make(map[int]bool)
+	for _, entry := range p.entries {
+		if !p.isExpired(entry.lease) {
+			usedPorts[entry.lease.Port] = true
+		}
+	}
+
+	if len(usedPorts) >= size {
+		return 0, errors.New("no sticky ports available in the configured range")
+	}
+
+	for attempts := 0; attempts < size; attempts++ {
+		candidate := portRange.Start + r.Intn(size)
+		if !usedPorts[candidate] {
+			return candidate, nil
 		}
 	}
 
