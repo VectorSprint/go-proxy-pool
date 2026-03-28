@@ -10,6 +10,7 @@ import (
 
 // This example demonstrates SOCKS5 proxy support in both httpcloak and nethttp adapters.
 // SOCKS5 uses gate.decodo.com:7000 exclusively - targeting is done via username parameters.
+// Sticky SOCKS5 requires a session ID; duration alone is not enough.
 
 func main() {
 	auth, err := decodo.NewAuth("my-proxy-user", "my-proxy-password")

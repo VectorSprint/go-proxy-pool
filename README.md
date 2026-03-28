@@ -89,7 +89,11 @@ httpClient := &http.Client{
 
 ## SOCKS5 代理接入
 
-SOCKS5 使用 `gate.decodo.com:7000`，地理位置通过 username 参数指定。
+SOCKS5 **只能** 使用 `gate.decodo.com:7000`，地理位置通过 username 参数指定。
+
+不要把 country / city / state endpoint（例如 `us.decodo.com`、`city.decodo.com`）直接用于 SOCKS5；这些 endpoint 只适用于 HTTP/HTTPS 代理。
+
+如果你需要 sticky SOCKS5，请显式设置 `Session.ID`。仅设置 `Session.DurationMinutes` 不会让 SOCKS5 固定到同一个会话。
 
 ### httpcloak + SOCKS5
 
@@ -134,9 +138,11 @@ cfg := decodo.Config{
   },
 }
 
-// 自动选择 city.decodo.com:21000 和 sticky port range
+// 自动选择 city.decodo.com:21000 和 sticky port range（HTTP/HTTPS 用）
 cfg.ApplyPreset()
 ```
+
+`ApplyPreset()` 主要用于 HTTP/HTTPS 场景。即使配置里已经应用了 country / city / state endpoint，`ProxyStringSOCKS5` / `ProxyURLSOCKS5` 仍会强制改用 `gate.decodo.com:7000`。
 
 ### 支持的 targeting 级别
 

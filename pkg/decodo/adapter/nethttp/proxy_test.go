@@ -129,6 +129,39 @@ func TestProxyURLSOCKS5WithDedicatedEndpoint(t *testing.T) {
 	}
 }
 
+func TestProxyURLSOCKS5WithAppliedPreset(t *testing.T) {
+	cfg := decodo.Config{
+		Auth: decodo.Auth{
+			Username: "username",
+			Password: "password",
+		},
+		Targeting: decodo.Targeting{
+			Country: "us",
+			City:    "new_york",
+		},
+		Session: decodo.Session{
+			Type:            decodo.SessionTypeSticky,
+			ID:              "session-1",
+			DurationMinutes: 30,
+		},
+	}
+
+	cfg.ApplyPreset()
+
+	proxyURL, err := nethttp.ProxyURLSOCKS5(cfg)
+	if err != nil {
+		t.Fatalf("ProxyURLSOCKS5() error = %v", err)
+	}
+
+	if proxyURL.Host != "gate.decodo.com:7000" {
+		t.Fatalf("host = %q, want %q", proxyURL.Host, "gate.decodo.com:7000")
+	}
+
+	if proxyURL.User.Username() != "user-username-country-us-city-new_york-session-session-1-sessionduration-30" {
+		t.Fatalf("username = %q", proxyURL.User.Username())
+	}
+}
+
 func TestProxyURLSOCKS5FromLease(t *testing.T) {
 	lease := decodo.Lease{
 		ProxyURL: "http://user-username-country-us-session-session-1-sessionduration-30:password@us.decodo.com:10001",

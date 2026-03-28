@@ -99,6 +99,36 @@ func TestProxyStringSOCKS5WithDedicatedEndpoint(t *testing.T) {
 	}
 }
 
+func TestProxyStringSOCKS5WithAppliedPreset(t *testing.T) {
+	cfg := decodo.Config{
+		Auth: decodo.Auth{
+			Username: "username",
+			Password: "password",
+		},
+		Targeting: decodo.Targeting{
+			Country: "us",
+			City:    "new_york",
+		},
+		Session: decodo.Session{
+			Type:            decodo.SessionTypeSticky,
+			ID:              "session-1",
+			DurationMinutes: 30,
+		},
+	}
+
+	cfg.ApplyPreset()
+
+	proxy, err := httpcloak.ProxyStringSOCKS5(cfg)
+	if err != nil {
+		t.Fatalf("ProxyStringSOCKS5() error = %v", err)
+	}
+
+	want := "socks5h://user-username-country-us-city-new_york-session-session-1-sessionduration-30:password@gate.decodo.com:7000"
+	if proxy != want {
+		t.Fatalf("proxy = %q, want %q", proxy, want)
+	}
+}
+
 func TestProxyStringSOCKS5FromLease(t *testing.T) {
 	lease := decodo.Lease{
 		ProxyURL: "http://user-username-country-us-session-session-1-sessionduration-30:password@us.decodo.com:10001",
