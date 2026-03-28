@@ -3,97 +3,25 @@
 一个面向 Decodo residential proxy 的 Go pkg，负责：
 
 - 建模 Decodo `user:pass` backconnect 配置
-- 生成可直接用于 `httpcloak` 和 `net/http` 的代理 URL
+- 生成可直接用于 `httpcloak`、`net/http` 和 `SOCKS5` 的代理 URL
 - 管理按业务 key 复用的 sticky session
-
-## 当前标准化状态
-
-当前项目已经具备这些常见 Go 项目要素：
-
-- 正式 module path：`github.com/VectorSprint/go-proxy-pool`
-- `CHANGELOG.md`
-- `README.md`
-- MIT `LICENSE`
-- `.gitignore`
-- `Taskfile.yml`
-- 基础 GitHub Actions 测试 workflow
-- 基础 GitHub Actions lint workflow
-- 仓库级 `.golangci.yml` lint 配置
-- 导出 API 的 Go doc 注释
-- 可运行示例与单元测试
+- 支持 100+ 国家、8 个城市、50 个美国州的端点预设
 
 ## 安装
 
-私有仓库场景下，建议先配置：
-
 ```bash
 go env -w GOPRIVATE=github.com/VectorSprint/*
-```
-
-然后在其他项目中拉取：
-
-```bash
 go get github.com/VectorSprint/go-proxy-pool@latest
 ```
 
-## 开发检查
-
-本仓库使用仓库根目录下的 `.golangci.yml` 作为统一 lint 配置，并通过 `Taskfile.yml` 暴露本地开发命令。
-
-先按 <https://taskfile.dev/> 安装 `task`，然后在仓库根目录执行：
-
-```bash
-task test
-task lint
-task check
-```
-
-其中 `task check` 会串行执行测试和 lint。
-
-GitHub Actions 的 `lint` workflow 仍然使用同一套仓库配置。
-
 ## 导入路径
-
-主入口：
 
 ```go
 import "github.com/VectorSprint/go-proxy-pool/pkg/decodo"
-```
 
-适配器：
-
-```go
 import httpcloakadapter "github.com/VectorSprint/go-proxy-pool/pkg/decodo/adapter/httpcloak"
 import nethttpadapter "github.com/VectorSprint/go-proxy-pool/pkg/decodo/adapter/nethttp"
 ```
-
-## username 和 password 应该怎么填
-
-### username
-
-这里填的是 **Decodo dashboard 里看到的原始 proxy user**。
-
-你应该填：
-
-```text
-my-proxy-user
-```
-
-你不应该填：
-
-```text
-user-my-proxy-user
-user-my-proxy-user-country-us
-```
-
-原因是：
-
-- `user-` 前缀由这个 pkg 自动加上
-- `country`、`city`、`session`、`sessionduration` 等参数由 `Targeting` 和 `Session` 自动拼装
-
-### password
-
-这里填的是 **Decodo dashboard 里对应 proxy user 的原始密码**，不要做任何拼接。
 
 ## 快速开始
 
@@ -122,13 +50,15 @@ if err != nil {
 }
 ```
 
-生成结果类似：
+生成结果：
 
 ```text
 http://user-my-proxy-user-country-us-city-new_york-session-account-1-sessionduration-30:my-proxy-password@gate.decodo.com:7000
 ```
 
-## 接入 httpcloak
+## HTTP/HTTPS 代理接入
+
+### httpcloak
 
 ```go
 proxy, err := httpcloakadapter.ProxyString(cfg)
@@ -140,7 +70,7 @@ client := client.NewClient("chrome-latest")
 client.SetProxy(proxy)
 ```
 
-## 接入 net/http
+### net/http
 
 ```go
 proxyFunc, err := nethttpadapter.ProxyFunc(cfg)
@@ -157,7 +87,68 @@ httpClient := &http.Client{
 }
 ```
 
-## Sticky session pool
+## SOCKS5 代理接入
+
+SOCKS5 使用 `gate.decodo.com:7000`，地理位置通过 username 参数指定。
+
+### httpcloak + SOCKS5
+
+```go
+proxy, err := httpcloakadapter.ProxyStringSOCKS5(cfg)
+if err != nil {
+  return err
+}
+
+// socks5h://user-my-proxy-user-country-us-city-new_york-session-account-1-sessionduration-30:my-proxy-password@gate.decodo.com:7000
+```
+
+### net/http + SOCKS5
+
+net/http 原生不支持 SOCKS5，需要配合第三方 dialer 使用：
+
+```go
+proxyURL, err := nethttpadapter.ProxyURLSOCKS5(cfg)
+if err != nil {
+  return err
+}
+
+// proxyURL 可用于 golang.org/x/net/proxy
+```
+
+## 端点预设 (Endpoint Presets)
+
+内置 100+ 国家、8 个城市、50 个美国州的端点配置，自动根据 targeting 选择正确的端点和端口。
+
+### 自动应用预设
+
+```go
+cfg := decodo.Config{
+  Auth: auth,
+  Targeting: decodo.Targeting{
+    Country: "us",
+    City:    "new_york",
+  },
+  Session: decodo.Session{
+    Type:            decodo.SessionTypeSticky,
+    DurationMinutes: 30,
+  },
+}
+
+// 自动选择 city.decodo.com:21000 和 sticky port range
+cfg.ApplyPreset()
+```
+
+### 支持的 targeting 级别
+
+| 级别 | 示例 | 端点 |
+|------|------|------|
+| 国家 | `Country: "us"` | us.decodo.com |
+| 城市 | `City: "new_york"` | city.decodo.com |
+| 美国州 | `State: "us_california"` | state.decodo.com |
+
+支持的端点详情见 [Decodo 文档](https://help.decodo.com/docs/residential-proxy-endpoints-and-ports)。
+
+## Sticky Session Pool
 
 ```go
 pool, err := decodo.NewPool(decodo.PoolOptions{
@@ -168,7 +159,7 @@ pool, err := decodo.NewPool(decodo.PoolOptions{
       DurationMinutes: 30,
     },
   },
-  FailureThreshold: 2,
+  FailureThreshold: 3,
 })
 if err != nil {
   return err
@@ -182,7 +173,27 @@ if err != nil {
 proxy := lease.ProxyURL
 ```
 
-如果同一个 key 需要强制换 IP：
+### 随机端口分配
+
+启用 `RandomPort` 可以在 sticky port range 内随机选择端口，降低被检测风险：
+
+```go
+pool, err := decodo.NewPool(decodo.PoolOptions{
+  Config: decodo.Config{
+    Auth:         auth,
+    EndpointSpec: caEndpoint, // ca.decodo.com:20001-29999
+    Session: decodo.Session{
+      Type:            decodo.SessionTypeSticky,
+      DurationMinutes: 30,
+    },
+  },
+  RandomPort:       true,
+  Rand:             rand.New(rand.NewSource(time.Now().UnixNano())),
+  FailureThreshold: 3,
+})
+```
+
+### 强制换 IP
 
 ```go
 if err := pool.Rotate("account-1"); err != nil {
@@ -190,7 +201,7 @@ if err := pool.Rotate("account-1"); err != nil {
 }
 ```
 
-如果上层请求失败并希望按阈值轮换：
+### 失败驱动轮换
 
 ```go
 if err := pool.ReportFailure("account-1", decodo.FailureCause{
@@ -200,25 +211,24 @@ if err := pool.ReportFailure("account-1", decodo.FailureCause{
 }
 ```
 
-## 当前边界
+## username 和 password 填法
 
-- 当前以 Decodo `user:pass` backconnect 为主
-- 默认端点为 `gate.decodo.com:7000`
-- 失败驱动轮换由上层显式调用 `ReportFailure`
-- 还没有接管真实 HTTP 请求执行
+### username
 
-## examples 目录
+填 **Decodo dashboard 里的原始 proxy user**，不要填 `user-` 前缀：
 
-仓库里提供了几个更接近真实使用的示例：
+```
+my-proxy-user        ✓ 正确
+user-my-proxy-user   ✗ 错误
+```
 
-- `examples/nethttp-basic`：标准库 `net/http` 接入
-- `examples/pool-basic`：sticky session pool 的获取与失败轮换
-- `examples/httpcloak-proxy-string`：为 `httpcloak` 生成可直接 `SetProxy(...)` 的字符串
-- `examples/dedicated-endpoint`：使用 Decodo dedicated endpoint、rotating port 和 sticky port range
+### password
 
-## endpoint 和 port 选择
+填 **原始密码**，不要做任何拼接。
 
-当前项目除了默认的 `gate.decodo.com:7000` backconnect 方案外，也支持显式建模 Decodo 文档里的 dedicated endpoint：
+## Dedicated Endpoint
+
+支持 Decodo dedicated endpoint 配置：
 
 ```go
 caEndpoint, err := decodo.NewEndpointSpec("ca.decodo.com", 20000, decodo.PortRange{
@@ -228,62 +238,39 @@ caEndpoint, err := decodo.NewEndpointSpec("ca.decodo.com", 20000, decodo.PortRan
 if err != nil {
   return err
 }
-```
 
-然后接入到配置里：
-
-```go
 cfg := decodo.Config{
   Auth:         auth,
   EndpointSpec: caEndpoint,
 }
 ```
 
-选择规则如下：
+选择规则：
 
-- rotating session：如果没显式指定 `Port`，自动使用 `RotatingPort`
-- sticky session：如果没显式指定 `Port`，自动使用 `StickyPortRange.Start`
-- sticky pool：如果配置了 `StickyPortRange`，pool 会在范围内为不同 key 分配可用 sticky port
-- 如果你显式设置了 `Config.Port`，则优先使用该端口
+- rotating session：自动使用 `RotatingPort`
+- sticky session：自动使用 `StickyPortRange.Start`
+- sticky pool：在范围内为不同 key 分配可用 sticky port
 
-这意味着你现在可以表达：
+## examples 目录
 
-- 默认 backconnect：`gate.decodo.com:7000`
-- dedicated rotating endpoint：例如 `ca.decodo.com:20000`
-- dedicated sticky endpoint：例如 `ca.decodo.com:20001-29999` 范围中的 sticky 端口
+- `examples/nethttp-basic`：标准库 `net/http` 接入
+- `examples/pool-basic`：sticky session pool 的获取与失败轮换
+- `examples/httpcloak-proxy-string`：为 `httpcloak` 生成可直接 `SetProxy(...)` 的字符串
+- `examples/dedicated-endpoint`：使用 Decodo dedicated endpoint
+- `examples/random-port`：随机端口分配和端点预设示例
 
-## Go docs
-
-当前已经补齐导出 API 的 Go doc 注释。
-
-本地可以这样看：
+## 开发检查
 
 ```bash
-go doc github.com/VectorSprint/go-proxy-pool/pkg/decodo
-go doc github.com/VectorSprint/go-proxy-pool/pkg/decodo/adapter/httpcloak
-go doc github.com/VectorSprint/go-proxy-pool/pkg/decodo/adapter/nethttp
+task test
+task lint
+task check
 ```
 
-如果未来仓库改为公开仓库，也可以直接使用 `pkg.go.dev` 查看文档。
+## 测试覆盖率
 
-## 发布前建议
-
-当前正式 module path 为：
-
-```text
-github.com/VectorSprint/go-proxy-pool
-```
-
-建议用语义化版本发布，例如：
-
-```bash
-git tag -a v0.1.0 -m "v0.1.0"
-git push origin main --tags
-```
-
-首个版本建议包含：
-
-- 当前 `decodo` 主包
-- `httpcloak` / `net/http` adapter
-- examples
-- `CHANGELOG.md`
+| Package | Coverage |
+|---------|----------|
+| `pkg/decodo` | 84.4% |
+| `pkg/decodo/adapter/httpcloak` | 84.0% |
+| `pkg/decodo/adapter/nethttp` | 86.4% |

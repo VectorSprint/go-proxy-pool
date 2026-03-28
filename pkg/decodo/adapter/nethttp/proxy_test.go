@@ -68,3 +68,104 @@ func TestProxyURLFromLease(t *testing.T) {
 		t.Fatalf("proxy url = %q, want %q", got, lease.ProxyURL)
 	}
 }
+
+func TestProxyURLSOCKS5(t *testing.T) {
+	cfg := decodo.Config{
+		Auth: decodo.Auth{
+			Username: "username",
+			Password: "password",
+		},
+		Targeting: decodo.Targeting{
+			Country: "us",
+		},
+		Session: decodo.Session{
+			Type:            decodo.SessionTypeSticky,
+			ID:              "session-1",
+			DurationMinutes: 30,
+		},
+	}
+
+	proxyURL, err := nethttp.ProxyURLSOCKS5(cfg)
+	if err != nil {
+		t.Fatalf("ProxyURLSOCKS5() error = %v", err)
+	}
+
+	if proxyURL.Scheme != "socks5h" {
+		t.Fatalf("scheme = %q, want %q", proxyURL.Scheme, "socks5h")
+	}
+
+	if proxyURL.Host != "gate.decodo.com:7000" {
+		t.Fatalf("host = %q, want %q", proxyURL.Host, "gate.decodo.com:7000")
+	}
+}
+
+func TestProxyURLSOCKS5WithDedicatedEndpoint(t *testing.T) {
+	spec, _ := decodo.NewEndpointSpec("us.decodo.com", 10000, decodo.PortRange{
+		Start: 10001,
+		End:   29999,
+	})
+
+	cfg := decodo.Config{
+		Auth: decodo.Auth{
+			Username: "username",
+			Password: "password",
+		},
+		EndpointSpec: spec,
+		Session: decodo.Session{
+			Type:            decodo.SessionTypeSticky,
+			ID:              "session-1",
+			DurationMinutes: 30,
+		},
+	}
+
+	proxyURL, err := nethttp.ProxyURLSOCKS5(cfg)
+	if err != nil {
+		t.Fatalf("ProxyURLSOCKS5() error = %v", err)
+	}
+
+	// SOCKS5 ignores dedicated endpoint, always uses gate.decodo.com:7000
+	if proxyURL.Host != "gate.decodo.com:7000" {
+		t.Fatalf("host = %q, want %q", proxyURL.Host, "gate.decodo.com:7000")
+	}
+}
+
+func TestProxyURLSOCKS5FromLease(t *testing.T) {
+	lease := decodo.Lease{
+		ProxyURL: "http://user-username-country-us-session-session-1-sessionduration-30:password@us.decodo.com:10001",
+	}
+
+	proxyURL, err := nethttp.ProxyURLSOCKS5FromLease(lease)
+	if err != nil {
+		t.Fatalf("ProxyURLSOCKS5FromLease() error = %v", err)
+	}
+
+	if proxyURL.Scheme != "socks5h" {
+		t.Fatalf("scheme = %q, want %q", proxyURL.Scheme, "socks5h")
+	}
+
+	if proxyURL.Host != "gate.decodo.com:7000" {
+		t.Fatalf("host = %q, want %q", proxyURL.Host, "gate.decodo.com:7000")
+	}
+
+	if proxyURL.User.Username() != "user-username-country-us-session-session-1-sessionduration-30" {
+		t.Fatalf("username = %q", proxyURL.User.Username())
+	}
+}
+
+func TestProxyFuncSOCKS5(t *testing.T) {
+	cfg := decodo.Config{
+		Auth: decodo.Auth{
+			Username: "username",
+			Password: "password",
+		},
+	}
+
+	proxyURL, err := nethttp.ProxyFuncSOCKS5(cfg)
+	if err != nil {
+		t.Fatalf("ProxyFuncSOCKS5() error = %v", err)
+	}
+
+	if proxyURL.Scheme != "socks5h" {
+		t.Fatalf("scheme = %q, want %q", proxyURL.Scheme, "socks5h")
+	}
+}
