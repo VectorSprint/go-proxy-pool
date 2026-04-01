@@ -29,6 +29,20 @@ func TestProxyStringFromConfig(t *testing.T) {
 	}
 }
 
+func TestProxyStringReturnsErrorForInvalidConfig(t *testing.T) {
+	cfg := decodo.Config{
+		Auth: decodo.Auth{
+			Username: "", // invalid: empty username
+			Password: "password",
+		},
+	}
+
+	_, err := httpcloak.ProxyString(cfg)
+	if err == nil {
+		t.Fatal("ProxyString() error = nil, want error for invalid config")
+	}
+}
+
 func TestProxyStringFromLease(t *testing.T) {
 	lease := decodo.Lease{
 		ProxyURL: "http://user-username-country-us-session-session-1-sessionduration-30:password@gate.decodo.com:7000",
@@ -65,6 +79,20 @@ func TestProxyStringSOCKS5(t *testing.T) {
 	want := "socks5h://user-username-country-us-session-session-1-sessionduration-30:password@gate.decodo.com:7000"
 	if proxy != want {
 		t.Fatalf("proxy = %q, want %q", proxy, want)
+	}
+}
+
+func TestProxyStringSOCKS5ReturnsErrorForInvalidConfig(t *testing.T) {
+	cfg := decodo.Config{
+		Auth: decodo.Auth{
+			Username: "", // invalid: empty username
+			Password: "password",
+		},
+	}
+
+	_, err := httpcloak.ProxyStringSOCKS5(cfg)
+	if err == nil {
+		t.Fatal("ProxyStringSOCKS5() error = nil, want error for invalid config")
 	}
 }
 

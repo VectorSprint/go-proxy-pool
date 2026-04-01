@@ -54,6 +54,20 @@ func TestProxyFuncFromConfig(t *testing.T) {
 	}
 }
 
+func TestProxyFuncReturnsErrorForInvalidConfig(t *testing.T) {
+	cfg := decodo.Config{
+		Auth: decodo.Auth{
+			Username: "", // invalid: empty username
+			Password: "password",
+		},
+	}
+
+	_, err := nethttp.ProxyFunc(cfg)
+	if err == nil {
+		t.Fatal("ProxyFunc() error = nil, want error for invalid config")
+	}
+}
+
 func TestProxyURLFromLease(t *testing.T) {
 	lease := decodo.Lease{
 		ProxyURL: "http://user-username-session-session-1-sessionduration-30:password@gate.decodo.com:7000",
