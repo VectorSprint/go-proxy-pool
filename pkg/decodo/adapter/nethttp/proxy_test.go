@@ -199,6 +199,31 @@ func TestProxyURLSOCKS5FromLease(t *testing.T) {
 	}
 }
 
+func TestProxyURLSOCKS5FromLeaseReturnsErrorForInvalidURL(t *testing.T) {
+	lease := decodo.Lease{
+		ProxyURL: "http://[invalid",
+	}
+
+	_, err := nethttp.ProxyURLSOCKS5FromLease(lease)
+	if err == nil {
+		t.Fatal("ProxyURLSOCKS5FromLease() error = nil, want error for invalid URL")
+	}
+}
+
+func TestProxyURLSOCKS5ReturnsErrorForInvalidConfig(t *testing.T) {
+	cfg := decodo.Config{
+		Auth: decodo.Auth{
+			Username: "",
+			Password: "password",
+		},
+	}
+
+	_, err := nethttp.ProxyURLSOCKS5(cfg)
+	if err == nil {
+		t.Fatal("ProxyURLSOCKS5() error = nil, want error for invalid config")
+	}
+}
+
 func TestProxyFuncSOCKS5(t *testing.T) {
 	cfg := decodo.Config{
 		Auth: decodo.Auth{

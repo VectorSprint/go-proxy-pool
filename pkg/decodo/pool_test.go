@@ -491,6 +491,91 @@ func TestPoolGetRequiresNonEmptyKey(t *testing.T) {
 	}
 }
 
+func TestPoolWithExplicitPortSkipsStickyPortAllocation(t *testing.T) {
+	now := time.Date(2026, 3, 25, 13, 0, 0, 0, time.UTC)
+	pool, err := decodo.NewPool(decodo.PoolOptions{
+		Config: decodo.Config{
+			Auth: decodo.Auth{
+				Username: "username",
+				Password: "password",
+			},
+			Port: 12345,
+			Session: decodo.Session{
+				Type:            decodo.SessionTypeSticky,
+				DurationMinutes: 30,
+			},
+		},
+		Now: func() time.Time {
+			return now
+		},
+		NewSessionID: sequenceSessionIDs("session-1"),
+	})
+	if err != nil {
+		t.Fatalf("NewPool() error = %v", err)
+	}
+
+	lease, err := pool.Get("account-1")
+	if err != nil {
+		t.Fatalf("Get() error = %v", err)
+	}
+
+	if lease.Port != 12345 {
+		t.Fatalf("port = %d, want %d", lease.Port, 12345)
+	}
+}
+
+func TestPoolRotatingSessionReturnsError(t *testing.T) {
+	_, err := decodo.NewPool(decodo.PoolOptions{
+		Config: decodo.Config{
+			Auth: decodo.Auth{
+				Username: "username",
+				Password: "password",
+			},
+			Session: decodo.Session{
+				Type:            decodo.SessionTypeRotating,
+				DurationMinutes: 0,
+			},
+		},
+	})
+	if err == nil {
+		t.Fatal("NewPool() error = nil, want error for rotating session")
+	}
+}
+
+func TestPoolDefaultStickyDuration(t *testing.T) {
+	now := time.Date(2026, 3, 25, 13, 0, 0, 0, time.UTC)
+	pool, err := decodo.NewPool(decodo.PoolOptions{
+		Config: decodo.Config{
+			Auth: decodo.Auth{
+				Username: "username",
+				Password: "password",
+			},
+			Session: decodo.Session{
+				Type: decodo.SessionTypeSticky,
+				ID:   "session-1",
+				// DurationMinutes intentionally 0
+			},
+		},
+		Now: func() time.Time {
+			return now
+		},
+		NewSessionID: sequenceSessionIDs("session-1"),
+	})
+	if err != nil {
+		t.Fatalf("NewPool() error = %v", err)
+	}
+
+	lease, err := pool.Get("account-1")
+	if err != nil {
+		t.Fatalf("Get() error = %v", err)
+	}
+
+	// Default sticky duration is 10 minutes
+	if !lease.ExpiresAt.Equal(now.Add(10 * time.Minute)) {
+		t.Fatalf("ExpiresAt = %s, want %s", lease.ExpiresAt, now.Add(10*time.Minute))
+	}
+}
+
 // TestPoolRandomPortExhaustedReturnsError is hard to test deterministically
 // since random port selection doesn't guarantee unique ports.
 // The exhausted case is already covered by TestPoolAllocatesSequentialPortsExhaustingRange.

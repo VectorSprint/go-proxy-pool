@@ -173,3 +173,14 @@ func TestProxyStringSOCKS5FromLease(t *testing.T) {
 		t.Fatalf("proxy = %q, want %q", proxy, want)
 	}
 }
+
+func TestProxyStringSOCKS5FromLeaseReturnsErrorForInvalidURL(t *testing.T) {
+	lease := decodo.Lease{
+		ProxyURL: "http://[invalid",
+	}
+
+	_, err := httpcloak.ProxyStringSOCKS5FromLease(lease)
+	if err == nil {
+		t.Fatal("ProxyStringSOCKS5FromLease() error = nil, want error for invalid URL")
+	}
+}

@@ -473,3 +473,419 @@ func TestEndpointSpecValidateRejectsInvalidStickyPortRange(t *testing.T) {
 		t.Fatal("Validate() error = nil, want error for invalid sticky port range")
 	}
 }
+
+func TestPortRangeValidateRejectsNonPositiveStart(t *testing.T) {
+	err := decodo.PortRange{Start: 0, End: 100}.Validate()
+	if err == nil {
+		t.Fatal("Validate() error = nil, want error when Start is 0")
+	}
+}
+
+func TestPortRangeValidateRejectsNonPositiveEnd(t *testing.T) {
+	err := decodo.PortRange{Start: 1, End: 0}.Validate()
+	if err == nil {
+		t.Fatal("Validate() error = nil, want error when End is 0")
+	}
+}
+
+func TestConfigValidateRejectsContinentWithCountry(t *testing.T) {
+	cfg := decodo.Config{
+		Auth: decodo.Auth{
+			Username: "username",
+			Password: "password",
+		},
+		Targeting: decodo.Targeting{
+			Country:    "us",
+			Continent:  "na",
+		},
+	}
+
+	err := cfg.Validate()
+	if err == nil {
+		t.Fatal("Validate() error = nil, want error when continent is combined with country")
+	}
+}
+
+func TestConfigValidateRejectsStateWithoutUsPrefix(t *testing.T) {
+	cfg := decodo.Config{
+		Auth: decodo.Auth{
+			Username: "username",
+			Password: "password",
+		},
+		Targeting: decodo.Targeting{
+			Country: "us",
+			State:   "california",
+		},
+	}
+
+	err := cfg.Validate()
+	if err == nil {
+		t.Fatal("Validate() error = nil, want error when state does not have us_ prefix")
+	}
+}
+
+func TestConfigValidateRejectsRotatingWithDuration(t *testing.T) {
+	cfg := decodo.Config{
+		Auth: decodo.Auth{
+			Username: "username",
+			Password: "password",
+		},
+		Session: decodo.Session{
+			Type:            decodo.SessionTypeRotating,
+			DurationMinutes: 10,
+		},
+	}
+
+	err := cfg.Validate()
+	if err == nil {
+		t.Fatal("Validate() error = nil, want error when rotating session has duration")
+	}
+}
+
+func TestConfigValidateRejectsRotatingWithSessionID(t *testing.T) {
+	cfg := decodo.Config{
+		Auth: decodo.Auth{
+			Username: "username",
+			Password: "password",
+		},
+		Session: decodo.Session{
+			Type:            decodo.SessionTypeRotating,
+			ID:              "my-session",
+		},
+	}
+
+	err := cfg.Validate()
+	if err == nil {
+		t.Fatal("Validate() error = nil, want error when rotating session has ID")
+	}
+}
+
+func TestConfigValidateRejectsUnsupportedSessionType(t *testing.T) {
+	cfg := decodo.Config{
+		Auth: decodo.Auth{
+			Username: "username",
+			Password: "password",
+		},
+		Session: decodo.Session{
+			Type: "unsupported",
+		},
+	}
+
+	err := cfg.Validate()
+	if err == nil {
+		t.Fatal("Validate() error = nil, want error for unsupported session type")
+	}
+}
+
+func TestConfigValidateRejectsPortOutsideStickyRange(t *testing.T) {
+	spec, _ := decodo.NewEndpointSpec("gate.decodo.com", 10000, decodo.PortRange{
+		Start: 10001,
+		End:   10003,
+	})
+	cfg := decodo.Config{
+		Auth: decodo.Auth{
+			Username: "username",
+			Password: "password",
+		},
+		EndpointSpec: spec,
+		Port:         9999,
+		Session: decodo.Session{
+			Type:            decodo.SessionTypeSticky,
+			ID:              "session-1",
+			DurationMinutes: 10,
+		},
+	}
+
+	err := cfg.Validate()
+	if err == nil {
+		t.Fatal("Validate() error = nil, want error when sticky port is outside range")
+	}
+}
+
+func TestConfigValidateShallowRejectsNegativePort(t *testing.T) {
+	cfg := decodo.Config{
+		Port: -1,
+	}
+
+	err := cfg.ValidateShallow()
+	if err == nil {
+		t.Fatal("ValidateShallow() error = nil, want error for negative port")
+	}
+}
+
+func TestAllDigitsRejectsNonDigits(t *testing.T) {
+	cfg := decodo.Config{
+		Auth: decodo.Auth{
+			Username: "username",
+			Password: "password",
+		},
+		Targeting: decodo.Targeting{
+			Country: "us",
+			ZIP:     "1234a",
+		},
+	}
+
+	err := cfg.Validate()
+	if err == nil {
+		t.Fatal("Validate() error = nil, want error for non-digit ZIP character")
+	}
+}
+
+func TestProxyUsernameReturnsErrorForInvalidConfig(t *testing.T) {
+	cfg := decodo.Config{
+		Auth: decodo.Auth{
+			Username: "",
+			Password: "password",
+		},
+	}
+
+	_, err := cfg.ProxyUsername()
+	if err == nil {
+		t.Fatal("ProxyUsername() error = nil, want error for invalid config")
+	}
+}
+
+func TestProxyURLReturnsErrorForInvalidConfig(t *testing.T) {
+	cfg := decodo.Config{
+		Auth: decodo.Auth{
+			Username: "",
+			Password: "password",
+		},
+	}
+
+	_, err := cfg.ProxyURL()
+	if err == nil {
+		t.Fatal("ProxyURL() error = nil, want error for invalid config")
+	}
+}
+
+func TestProxyUsernameWithAllTargeting(t *testing.T) {
+	cfg := decodo.Config{
+		Auth: decodo.Auth{
+			Username: "username",
+			Password: "password",
+		},
+		Targeting: decodo.Targeting{
+			Country: "us",
+			State:   "us_california",
+			City:    "los_angeles",
+		},
+		Session: decodo.Session{
+			Type:            decodo.SessionTypeSticky,
+			ID:              "session-1",
+			DurationMinutes: 30,
+		},
+	}
+
+	username, err := cfg.ProxyUsername()
+	if err != nil {
+		t.Fatalf("ProxyUsername() error = %v", err)
+	}
+
+	want := "user-username-country-us-state-us_california-city-los_angeles-session-session-1-sessionduration-30"
+	if username != want {
+		t.Fatalf("username = %q, want %q", username, want)
+	}
+}
+
+func TestProxyUsernameWithASN(t *testing.T) {
+	cfg := decodo.Config{
+		Auth: decodo.Auth{
+			Username: "username",
+			Password: "password",
+		},
+		Targeting: decodo.Targeting{
+			ASN: 12345,
+		},
+	}
+
+	username, err := cfg.ProxyUsername()
+	if err != nil {
+		t.Fatalf("ProxyUsername() error = %v", err)
+	}
+
+	want := "user-username-asn-12345"
+	if username != want {
+		t.Fatalf("username = %q, want %q", username, want)
+	}
+}
+
+func TestProxyUsernameWithContinent(t *testing.T) {
+	cfg := decodo.Config{
+		Auth: decodo.Auth{
+			Username: "username",
+			Password: "password",
+		},
+		Targeting: decodo.Targeting{
+			Continent: "na",
+		},
+	}
+
+	username, err := cfg.ProxyUsername()
+	if err != nil {
+		t.Fatalf("ProxyUsername() error = %v", err)
+	}
+
+	want := "user-username-continent-na"
+	if username != want {
+		t.Fatalf("username = %q, want %q", username, want)
+	}
+}
+
+func TestProxyURLWithStickySession(t *testing.T) {
+	cfg := decodo.Config{
+		Auth: decodo.Auth{
+			Username: "username",
+			Password: "password",
+		},
+		Session: decodo.Session{
+			Type:            decodo.SessionTypeSticky,
+			ID:              "session-1",
+			DurationMinutes: 30,
+		},
+	}
+
+	proxyURL, err := cfg.ProxyURL()
+	if err != nil {
+		t.Fatalf("ProxyURL() error = %v", err)
+	}
+
+	if proxyURL.User.Username() != "user-username-session-session-1-sessionduration-30" {
+		t.Fatalf("username = %q", proxyURL.User.Username())
+	}
+}
+
+func TestConfigValidateRejectsCityWithoutCountry(t *testing.T) {
+	cfg := decodo.Config{
+		Auth: decodo.Auth{
+			Username: "username",
+			Password: "password",
+		},
+		Targeting: decodo.Targeting{
+			City: "new_york",
+		},
+	}
+
+	err := cfg.Validate()
+	if err == nil {
+		t.Fatal("Validate() error = nil, want error when city is set without country")
+	}
+}
+
+func TestConfigValidateRejectsStateWithNonUSCountry(t *testing.T) {
+	cfg := decodo.Config{
+		Auth: decodo.Auth{
+			Username: "username",
+			Password: "password",
+		},
+		Targeting: decodo.Targeting{
+			Country: "de",
+			State:   "us_california",
+		},
+	}
+
+	err := cfg.Validate()
+	if err == nil {
+		t.Fatal("Validate() error = nil, want error when state is set with non-US country")
+	}
+}
+
+func TestConfigValidateRejectsZIPWithNonUSCountry(t *testing.T) {
+	cfg := decodo.Config{
+		Auth: decodo.Auth{
+			Username: "username",
+			Password: "password",
+		},
+		Targeting: decodo.Targeting{
+			Country: "de",
+			ZIP:     "12345",
+		},
+	}
+
+	err := cfg.Validate()
+	if err == nil {
+		t.Fatal("Validate() error = nil, want error when ZIP is set with non-US country")
+	}
+}
+
+func TestConfigValidateRejectsInvalidStickyDurationIsCoveredByNormalized(t *testing.T) {
+	cfg := decodo.Config{
+		Auth: decodo.Auth{
+			Username: "username",
+			Password: "password",
+		},
+		Session: decodo.Session{
+			Type:            decodo.SessionTypeSticky,
+			ID:              "session-1",
+			DurationMinutes: 0, // Normalized() fills in default of 10
+		},
+	}
+
+	// DurationMinutes=0 is normalized to default value by Normalized(), so Validate passes
+	_, err := cfg.Normalized()
+	if err != nil {
+		t.Fatalf("Normalized() error = %v", err)
+	}
+}
+
+func TestConfigNormalizedSetsRotatingSessionTypeByDefault(t *testing.T) {
+	cfg := decodo.Config{
+		Auth: decodo.Auth{
+			Username: "username",
+			Password: "password",
+		},
+		Session: decodo.Session{
+			ID: "session-1", // ID present but Type empty
+		},
+	}
+
+	normalized, err := cfg.Normalized()
+	if err != nil {
+		t.Fatalf("Normalized() error = %v", err)
+	}
+
+	// When ID is set but Type is empty, Normalized should infer SessionTypeSticky
+	if normalized.Session.Type != decodo.SessionTypeSticky {
+		t.Fatalf("Session.Type = %q, want %q", normalized.Session.Type, decodo.SessionTypeSticky)
+	}
+}
+
+func TestConfigNormalizedSetsRotatingWhenNoID(t *testing.T) {
+	cfg := decodo.Config{
+		Auth: decodo.Auth{
+			Username: "username",
+			Password: "password",
+		},
+		Session: decodo.Session{
+			// Both ID and Type empty → should infer SessionTypeRotating
+		},
+	}
+
+	normalized, err := cfg.Normalized()
+	if err != nil {
+		t.Fatalf("Normalized() error = %v", err)
+	}
+
+	if normalized.Session.Type != decodo.SessionTypeRotating {
+		t.Fatalf("Session.Type = %q, want %q", normalized.Session.Type, decodo.SessionTypeRotating)
+	}
+}
+
+func TestConfigValidateRejectsZIPWithCityOrState(t *testing.T) {
+	cfg := decodo.Config{
+		Auth: decodo.Auth{
+			Username: "username",
+			Password: "password",
+		},
+		Targeting: decodo.Targeting{
+			Country: "us",
+			ZIP:     "12345",
+			City:    "new_york",
+		},
+	}
+
+	err := cfg.Validate()
+	if err == nil {
+		t.Fatal("Validate() error = nil, want error when ZIP is combined with city")
+	}
+}
