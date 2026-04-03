@@ -8,13 +8,15 @@ import (
 	"time"
 )
 
-// FailureCause carries failure information reported by the caller.
+// FailureCause represents a proxy failure reported by the caller to Pool.ReportFailure.
 type FailureCause struct {
 	Err        error
 	StatusCode int
 }
 
-// Lease represents one resolved sticky-session proxy assignment for a business key.
+// Lease represents a resolved sticky-session proxy assignment for a business key.
+// Obtain a lease by calling Pool.Get. The lease remains valid until its
+// ExpiresAt time has passed, unless explicitly rotated via Pool.Rotate.
 type Lease struct {
 	Key       string
 	SessionID string
@@ -23,7 +25,7 @@ type Lease struct {
 	ExpiresAt time.Time
 }
 
-// PoolOptions configures how a keyed sticky-session pool behaves.
+// PoolOptions configures how a keyed sticky-session Pool behaves.
 type PoolOptions struct {
 	Config           Config
 	FailureThreshold int
@@ -37,7 +39,9 @@ type PoolOptions struct {
 	Rand *rand.Rand
 }
 
-// Pool stores sticky-session leases keyed by caller-defined business identifiers.
+// Pool manages sticky-session proxy leases, each keyed by a caller-defined business identifier
+// (e.g., user ID, order ID). The Pool ensures that each key consistently uses the same
+// residential proxy for the session duration, then rotates automatically.
 type Pool struct {
 	mu               sync.Mutex
 	config           Config
@@ -56,7 +60,9 @@ type poolEntry struct {
 	failureCount int
 }
 
-// NewPool creates a keyed sticky-session pool from a Decodo configuration.
+// NewPool creates a keyed sticky-session Pool from a Decodo Config.
+// The Config must have Session.Type set to SessionTypeSticky. NewPool returns
+// an error if the config validation fails or if a sticky session is not requested.
 func NewPool(options PoolOptions) (*Pool, error) {
 	config := options.Config
 	if config.Session.Type == "" {
@@ -105,7 +111,8 @@ func NewPool(options PoolOptions) (*Pool, error) {
 	}, nil
 }
 
-// Get returns the active lease for the key or creates a new one when none exists or it expired.
+// Get returns the active Lease for the given business key. If no active lease exists
+// or the existing lease has expired, a new one is allocated automatically.
 func (p *Pool) Get(key string) (Lease, error) {
 	if key == "" {
 		return Lease{}, errors.New("key is required")
@@ -128,7 +135,8 @@ func (p *Pool) Get(key string) (Lease, error) {
 	return lease, nil
 }
 
-// Rotate invalidates the current lease for the key so that the next Get allocates a new session.
+// Rotate immediately invalidates the current lease for the key so that the next
+// call to Get allocates a fresh session.
 func (p *Pool) Rotate(key string) error {
 	if key == "" {
 		return errors.New("key is required")
@@ -140,7 +148,8 @@ func (p *Pool) Rotate(key string) error {
 	return nil
 }
 
-// ReportFailure increments failure state for the key and rotates once the threshold is reached.
+// ReportFailure records a failure for the given key. When the number of recorded
+// failures reaches FailureThreshold, the lease is rotated automatically.
 func (p *Pool) ReportFailure(key string, _ FailureCause) error {
 	if key == "" {
 		return errors.New("key is required")
@@ -164,7 +173,9 @@ func (p *Pool) ReportFailure(key string, _ FailureCause) error {
 	return nil
 }
 
-// CleanupExpired removes expired leases and returns how many entries were deleted.
+// CleanupExpired removes all expired leases from the pool and returns the number
+// of entries deleted. Call this periodically (e.g., via a background goroutine)
+// to prevent the pool from accumulating stale entries.
 func (p *Pool) CleanupExpired() int {
 	p.mu.Lock()
 	defer p.mu.Unlock()
