@@ -280,11 +280,7 @@ func (c Config) Preset() (EndpointPreset, bool) {
 // correct endpoint, port, and sticky port range.
 func (c *Config) ApplyPreset() {
 	if preset, ok := c.Preset(); ok {
-		c.EndpointSpec = EndpointSpec{
-			Host:            preset.Host,
-			RotatingPort:    preset.RotatingPort,
-			StickyPortRange: preset.StickyPortRange,
-		}
+		c.EndpointSpec = EndpointSpec(preset)
 	}
 }
 
