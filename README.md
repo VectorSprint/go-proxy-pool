@@ -1,5 +1,11 @@
 # go-proxy-pool
 
+[![CI](https://github.com/VectorSprint/go-proxy-pool/actions/workflows/go.yml/badge.svg)](https://github.com/VectorSprint/go-proxy-pool/actions/workflows/go.yml)
+[![Version](https://img.shields.io/github/v/release/VectorSprint/go-proxy-pool?include_prereleases&sort=semver)](https://github.com/VectorSprint/go-proxy-pool/releases)
+[![Go Version](https://img.shields.io/github/go-mod/go-version/VectorSprint/go-proxy-pool)](https://github.com/VectorSprint/go-proxy-pool)
+[![License](https://img.shields.io/github/license/VectorSprint/go-proxy-pool)](LICENSE)
+[![godoc](https://pkg.go.dev/badge/github.com/VectorSprint/go-proxy-pool)](https://pkg.go.dev/github.com/VectorSprint/go-proxy-pool)
+
 一个面向 Decodo residential proxy 的 Go pkg，负责：
 
 - 建模 Decodo `user:pass` backconnect 配置
