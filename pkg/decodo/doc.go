@@ -7,6 +7,8 @@
 // Create an Auth from your Decodo user credentials:
 //
 //	auth, err := decodo.NewAuth("my-proxy-user", "my-proxy-password")
+//	// NewAuth validates the raw proxy username early and rejects escaped
+//	// or unsupported characters before a request reaches the proxy.
 //
 // Build a Config describing your desired proxy session and endpoint:
 //

@@ -174,14 +174,14 @@ var wellKnownPresets = map[string]EndpointPreset{
 // cityPresets contains all documented city-level endpoints with their specific ports.
 // Data sourced from https://help.decodo.com/docs/residential-proxy-endpoints-and-ports
 var cityPresets = map[string]EndpointPreset{
-	"new_york":     {Host: "city.decodo.com", RotatingPort: 21000, StickyPortRange: PortRange{Start: 21001, End: 21049}},
-	"los_angeles":  {Host: "city.decodo.com", RotatingPort: 21050, StickyPortRange: PortRange{Start: 21051, End: 21099}},
-	"chicago":      {Host: "city.decodo.com", RotatingPort: 21000, StickyPortRange: PortRange{Start: 21101, End: 21149}},
-	"houston":      {Host: "city.decodo.com", RotatingPort: 21150, StickyPortRange: PortRange{Start: 21151, End: 21199}},
-	"miami":        {Host: "city.decodo.com", RotatingPort: 21200, StickyPortRange: PortRange{Start: 21201, End: 21249}},
-	"london":       {Host: "city.decodo.com", RotatingPort: 21250, StickyPortRange: PortRange{Start: 21251, End: 21299}},
-	"berlin":       {Host: "city.decodo.com", RotatingPort: 21300, StickyPortRange: PortRange{Start: 21301, End: 21349}},
-	"moscow":       {Host: "city.decodo.com", RotatingPort: 21350, StickyPortRange: PortRange{Start: 21351, End: 21399}},
+	"new_york":    {Host: "city.decodo.com", RotatingPort: 21000, StickyPortRange: PortRange{Start: 21001, End: 21049}},
+	"los_angeles": {Host: "city.decodo.com", RotatingPort: 21050, StickyPortRange: PortRange{Start: 21051, End: 21099}},
+	"chicago":     {Host: "city.decodo.com", RotatingPort: 21000, StickyPortRange: PortRange{Start: 21101, End: 21149}},
+	"houston":     {Host: "city.decodo.com", RotatingPort: 21150, StickyPortRange: PortRange{Start: 21151, End: 21199}},
+	"miami":       {Host: "city.decodo.com", RotatingPort: 21200, StickyPortRange: PortRange{Start: 21201, End: 21249}},
+	"london":      {Host: "city.decodo.com", RotatingPort: 21250, StickyPortRange: PortRange{Start: 21251, End: 21299}},
+	"berlin":      {Host: "city.decodo.com", RotatingPort: 21300, StickyPortRange: PortRange{Start: 21301, End: 21349}},
+	"moscow":      {Host: "city.decodo.com", RotatingPort: 21350, StickyPortRange: PortRange{Start: 21351, End: 21399}},
 }
 
 // statePresets contains all documented US state-level endpoints with their specific ports.
@@ -200,14 +200,14 @@ var statePresets = map[string]EndpointPreset{
 	"hawaii":         {Host: "state.decodo.com", RotatingPort: 17800, StickyPortRange: PortRange{Start: 17801, End: 17899}},
 	"idaho":          {Host: "state.decodo.com", RotatingPort: 17900, StickyPortRange: PortRange{Start: 17901, End: 17999}},
 	"illinois":       {Host: "state.decodo.com", RotatingPort: 12000, StickyPortRange: PortRange{Start: 12001, End: 12999}},
-	"indiana":         {Host: "state.decodo.com", RotatingPort: 18000, StickyPortRange: PortRange{Start: 18001, End: 18099}},
+	"indiana":        {Host: "state.decodo.com", RotatingPort: 18000, StickyPortRange: PortRange{Start: 18001, End: 18099}},
 	"iowa":           {Host: "state.decodo.com", RotatingPort: 18100, StickyPortRange: PortRange{Start: 18101, End: 18199}},
 	"kansas":         {Host: "state.decodo.com", RotatingPort: 18200, StickyPortRange: PortRange{Start: 18201, End: 18299}},
 	"kentucky":       {Host: "state.decodo.com", RotatingPort: 18300, StickyPortRange: PortRange{Start: 18301, End: 18399}},
 	"louisiana":      {Host: "state.decodo.com", RotatingPort: 18400, StickyPortRange: PortRange{Start: 18401, End: 18499}},
 	"maine":          {Host: "state.decodo.com", RotatingPort: 18500, StickyPortRange: PortRange{Start: 18501, End: 18599}},
 	"maryland":       {Host: "state.decodo.com", RotatingPort: 18600, StickyPortRange: PortRange{Start: 18601, End: 18699}},
-	"massachusetts":   {Host: "state.decodo.com", RotatingPort: 18700, StickyPortRange: PortRange{Start: 18701, End: 18799}},
+	"massachusetts":  {Host: "state.decodo.com", RotatingPort: 18700, StickyPortRange: PortRange{Start: 18701, End: 18799}},
 	"michigan":       {Host: "state.decodo.com", RotatingPort: 18800, StickyPortRange: PortRange{Start: 18801, End: 18899}},
 	"minnesota":      {Host: "state.decodo.com", RotatingPort: 18900, StickyPortRange: PortRange{Start: 18901, End: 18999}},
 	"mississippi":    {Host: "state.decodo.com", RotatingPort: 19000, StickyPortRange: PortRange{Start: 19001, End: 19099}},
@@ -440,12 +440,20 @@ func NewAuth(username, password string) (Auth, error) {
 
 // Validate checks whether the credentials can be used to build a Decodo proxy username.
 func (a Auth) Validate() error {
-	if strings.TrimSpace(a.Username) == "" {
+	username := strings.TrimSpace(a.Username)
+
+	if username == "" {
 		return errors.New("username is required")
 	}
 
-	if strings.HasPrefix(strings.TrimSpace(a.Username), "user-") {
+	if strings.HasPrefix(username, "user-") {
 		return errors.New("username must be the raw decodo proxy username without the user- prefix")
+	}
+
+	for _, r := range username {
+		if r > unicode.MaxASCII || (!unicode.IsLetter(r) && !unicode.IsDigit(r) && r != '.' && r != '_' && r != '-') {
+			return errors.New("username contains invalid characters; only letters, digits, dot, underscore, and hyphen are allowed")
+		}
 	}
 
 	if strings.TrimSpace(a.Password) == "" {

@@ -26,3 +26,13 @@ Feature: Decodo proxy pool for Go clients
     And failure threshold 2
     When I report two failures for business key "account-1"
     Then the next proxy for business key "account-1" uses a new session id
+
+  Scenario: Reject invalid proxy username input early
+    Given a raw Decodo proxy username containing spaces, escapes, or other invalid symbols
+    When I create auth credentials with NewAuth
+    Then I get a local validation error instead of reaching proxy authentication
+
+  Scenario: Accept safe characters in raw proxy username input
+    Given a raw Decodo proxy username using only letters, digits, dot, underscore, and hyphen
+    When I create auth credentials with NewAuth
+    Then the username is accepted unchanged

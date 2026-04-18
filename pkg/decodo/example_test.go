@@ -36,6 +36,13 @@ func ExampleNewAuth() {
 	// http://user-my-proxy-user-country-us-city-new_york-session-account-1-sessionduration-30:my-proxy-password@gate.decodo.com:7000
 }
 
+func ExampleNewAuth_invalidUsername() {
+	_, err := decodo.NewAuth("my%2Fproxy%2Fuser", "my-proxy-password")
+	fmt.Println(err)
+	// Output:
+	// username contains invalid characters; only letters, digits, dot, underscore, and hyphen are allowed
+}
+
 func ExamplePool_Get() {
 	auth, err := decodo.NewAuth("my-proxy-user", "my-proxy-password")
 	if err != nil {

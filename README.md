@@ -26,6 +26,8 @@ import nethttpadapter "github.com/VectorSprint/go-proxy-pool/pkg/decodo/adapter/
 ## 快速开始
 
 ```go
+// NewAuth 会尽早校验原始 proxy user，非法字符会直接返回 error，
+// 避免请求真正打到代理时才出现 407。
 auth, err := decodo.NewAuth("my-proxy-user", "my-proxy-password")
 if err != nil {
   return err
@@ -227,6 +229,16 @@ if err := pool.ReportFailure("account-1", decodo.FailureCause{
 my-proxy-user        ✓ 正确
 user-my-proxy-user   ✗ 错误
 ```
+
+`NewAuth()` / `Auth.Validate()` 会校验 username，只允许：
+
+- 字母
+- 数字
+- `.`
+- `_`
+- `-`
+
+像空格、`%` 转义残留、`@`、控制字符、中文或其他非 ASCII 字符都会直接返回错误，避免等到代理认证阶段才暴露成 `407 Proxy Authentication Required`。
 
 ### password
 
