@@ -8,6 +8,20 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ### Added
 
+- Nothing yet.
+
+## [0.4.0] - 2026-05-14
+
+### Added
+
+- `pkg/simpleproxy` for parsing plain `ip:port:username:password` proxy entries
+- `simpleproxy.IPv4Range` to expand the last IPv4 octet dynamically without hardcoding full proxy lists
+- README and BDD documentation for simple authenticated proxy usage
+
+## [0.3.0] - 2026-04-19
+
+### Added
+
 - Repository-level `.golangci.yml` and `Taskfile.yml` for local `test`, `lint`, and `check` commands
 
 ## [0.2.0] - 2026-03-25

@@ -9,6 +9,7 @@
 一个面向 Decodo residential proxy 的 Go pkg，负责：
 
 - 建模 Decodo `user:pass` backconnect 配置
+- 解析通用 `ip:port:username:password` 简单代理格式
 - 生成可直接用于 `httpcloak`、`net/http` 和 `SOCKS5` 的代理 URL
 - 管理按业务 key 复用的 sticky session
 - 支持 100+ 国家、8 个城市、50 个美国州的端点预设
@@ -24,6 +25,7 @@ go get github.com/VectorSprint/go-proxy-pool@latest
 
 ```go
 import "github.com/VectorSprint/go-proxy-pool/pkg/decodo"
+import "github.com/VectorSprint/go-proxy-pool/pkg/simpleproxy"
 
 import httpcloakadapter "github.com/VectorSprint/go-proxy-pool/pkg/decodo/adapter/httpcloak"
 import nethttpadapter "github.com/VectorSprint/go-proxy-pool/pkg/decodo/adapter/nethttp"
@@ -62,6 +64,34 @@ if err != nil {
 
 ```text
 http://user-my-proxy-user-country-us-city-new_york-session-account-1-sessionduration-30:my-proxy-password@gate.decodo.com:7000
+```
+
+## 简单代理格式
+
+如果代理供应商给的是 `ip:port:username:password` 这种简单格式，可以使用 `pkg/simpleproxy` 解析并生成标准 HTTP proxy URL：
+
+```go
+proxy, err := simpleproxy.Parse("40.27.182.2:3128:tgkoroke:tgkorfedwoksokfed")
+if err != nil {
+  return err
+}
+
+proxyURL := proxy.URL()
+// http://tgkoroke:tgkorfedwoksokfed@40.27.182.2:3128
+```
+
+如果同一段代理只需要替换 IPv4 最后一位，也可以由调用方传入范围动态生成，不需要把代理信息硬编码在 pkg 里：
+
+```go
+base, err := simpleproxy.Parse("40.27.182.2:3128:tgkoroke:tgkorfedwoksokfed")
+if err != nil {
+  return err
+}
+
+proxies, err := simpleproxy.IPv4Range(base, 1, 251)
+if err != nil {
+  return err
+}
 ```
 
 ## HTTP/HTTPS 代理接入
